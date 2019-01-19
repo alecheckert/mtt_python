@@ -4,7 +4,7 @@ A Python implementation of the multiple-target tracing (MTT) algorithm to locali
 
 The algorithm was originally developed for the problem of tracking fluorescently labeled proteins at the cell membrane by Arnauld Sergé, Nicolas Bertaux, Hervé Rigneault, and Didier Marguet in
 
-	Sergé *et. al.* "Dynamic multiple-target tracing to probe spatiotemporal cartography of cell membranes." *Nature Methods* **5**, 687-694 (2008).
+Sergé *et. al.* "Dynamic multiple-target tracing to probe spatiotemporal cartography of cell membranes." *Nature Methods* **5**, 687-694 (2008).
 
 Requires the [https://pypi.org/project/nd2reader/](nd2reader) package.
 
