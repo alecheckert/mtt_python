@@ -120,7 +120,7 @@ def localizeND2file(
 				o.write(format_string % loc)
 				particle_idx += 1
 
-			sys.stdout.write('Finished with %d/%d frames...\r' % (frame_idx + 1, N_frames))
+			sys.stdout.write('Finished localizing %d/%d frames...\r' % (frame_idx + 1, N_frames))
 			sys.stdout.flush()
 
 	print('Finished localizing %s (%.1f sec)' % (nd2_file, time.clock() - time_0))
@@ -919,6 +919,27 @@ if __name__ == '__main__':
 		help = 'peak emission wavelength in um',
 		default = 0.664
 	)
+	parser.add_argument(
+		'-n',
+		'--NA',
+		type = float,
+		help = 'numerical aperture of microscope',
+		default = 1.49
+	)
+	parser.add_argument(
+		'-s',
+		'--searchExpFac',
+		type = float,
+		help = 'modifier for search radius of particle',
+		default = 9
+	)
+	parser.add_argument(
+		'-b',
+		'--max_blinks',
+		type = int,
+		help = 'maximum number of frames tolerated for a blinking trajectory before dropping',
+		default = 2
+	)
 	args = parser.parse_args()
 	if os.path.isdir(args.nd2_file):
 		path_list = ['%s/%s' % (args.nd2_file, i) for i in os.listdir(args.nd2_file)]
@@ -929,7 +950,10 @@ if __name__ == '__main__':
 				pixel_size_um = args.pixel_size_um,
 				frame_interval = args.frame_interval,
 				Dmax = args.Dmax,
-				wavelength = args.wavelength
+				wavelength = args.wavelength,
+				NA = args.NA,
+				searchExpFac = args.searchExpFac,
+				max_blinks = args.max_blinks
 			)
 	elif os.path.isfile(args.nd2_file):
 		localizeAndTrackND2file(
@@ -938,6 +962,9 @@ if __name__ == '__main__':
 			pixel_size_um = args.pixel_size_um,
 			frame_interval = args.frame_interval,
 			Dmax = args.Dmax,
-			wavelength = args.wavelength
+			wavelength = args.wavelength,
+			NA = args.NA,
+			searchExpFac = args.searchExpFac,
+			max_blinks = args.max_blinks
 		)
 
