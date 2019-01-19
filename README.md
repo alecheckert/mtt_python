@@ -11,7 +11,7 @@ It has since been adapted for various biological tracking experiments. The algor
 2. Localize particles with subpixel accuracy.
 3. Start trajectories out of localizations from the first frame.
 4. Iterate through the rest of the frames, reconnecting existing trajectories with new localizations according to a probabilistic model ("tracking").
-5. Save data to a MAT file, which is readable by MATLAB or Python's scipy.io.loadmat function.
+5. Save data to a MAT file, which is readable by MATLAB or Python's ```scipy.io.loadmat``` function.
 
 ## Tracking implementation 
 
