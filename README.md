@@ -2,7 +2,7 @@
 
 A Python implementation of the multiple-target tracing (MTT) algorithm to localize and track fluorophores in temporal super-resolution microscopy data. Takes Nikon ND2 files (and in the future TIF files) as input and generates localization and tracking data readable by MATLAB and other programs. Requires the [https://pypi.org/project/nd2reader/](nd2reader) package.
 
-The algorithm was originally developed to track diffusing, fluorescently labeled proteins at the cell membrane by Arnauld Sergé, Nicolas Bertaux, Hervé Rigneault, and Didier Marguet in their paper
+The algorithm was developed to track diffusing, fluorescently labeled proteins at the cell membrane by Arnauld Sergé, Nicolas Bertaux, Hervé Rigneault, and Didier Marguet in their paper
 
 Sergé *et. al.* "Dynamic multiple-target tracing to probe spatiotemporal cartography of cell membranes." *Nature Methods* **5**, 687-694 (2008).
 
