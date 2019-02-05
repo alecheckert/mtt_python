@@ -59,10 +59,10 @@ def localizeAndTrackND2file(
 		frame_interval,
 		mat_save_file = mat_save_file,
 		Dmax = Dmax,
-		naive_Dbound = 0.1,
-		searchExpFac = 9,
-		max_blinks = 2,
-		minInt = 0.0
+		naive_Dbound = naive_Dbound,
+		searchExpFac = searchExpFac,
+		max_blinks = max_blinks,
+		minInt = minInt
 	)
 	return trajectories
 
@@ -930,11 +930,11 @@ if __name__ == '__main__':
 		'--max_blinks',
 		type = int,
 		help = 'maximum number of frames tolerated for a blinking trajectory before dropping',
-		default = 2
+		default = 1
 	)
 	args = parser.parse_args()
 	if os.path.isdir(args.nd2_file):
-		path_list = ['%s/%s' % (args.nd2_file, i) for i in os.listdir(args.nd2_file)]
+		path_list = ['%s/%s' % (args.nd2_file, i) for i in os.listdir(args.nd2_file) if '.nd2' in i]
 		for nd2_path in path_list:
 			localizeAndTrackND2file(
 				nd2_path,
