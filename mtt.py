@@ -881,7 +881,7 @@ if __name__ == '__main__':
 		'--error_rate',
 		type = float,
 		help = 'log-error threshold for detection',
-		default = 7.0
+		default = 8.5
 	)
 	parser.add_argument(
 		'-p',
@@ -902,7 +902,7 @@ if __name__ == '__main__':
 		'--Dmax',
 		type = float,
 		help = 'Max expected diffusion coefficient',
-		default = 20.0
+		default = 15.0
 	)
 	parser.add_argument(
 		'-w',
@@ -923,7 +923,7 @@ if __name__ == '__main__':
 		'--searchExpFac',
 		type = float,
 		help = 'modifier for search radius of particle',
-		default = 9
+		default = 16
 	)
 	parser.add_argument(
 		'-b',
