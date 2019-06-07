@@ -21,6 +21,8 @@ from scipy import io as sio
 import argparse
 import os 
 import time 
+from munkres import Munkres
+munkres_solver = Munkres()
 
 def localizeAndTrackND2file(
 	nd2_file,
@@ -39,6 +41,7 @@ def localizeAndTrackND2file(
 	minInt = 0.0
 ):
 	f = ND2Reader(nd2_file)
+	print(f)
 	loc_file = nd2_file.replace('.nd2', '_locs.txt')
 	if not mat_save_file:
 		mat_save_file = nd2_file.replace('.nd2', '_Tracked.mat')
@@ -726,7 +729,11 @@ def reconnectFrame(
 						var_free,
 						naive_var_bound
 					)
-			P = minimizeTrace(LL)
+			#P = minimizeTrace(LL)
+			assignments = np.asarray(munkres_solve.compute(LL), dtype = 'uint8')
+			P = np.zeros((max_dim, max_dim), dtype = 'uint8')
+			P[assignments[:,0], assignments[:,1]] = 1
+
 			expanded_traj_indices = np.zeros(max_dim, dtype = 'int8')
 			expanded_traj_indices[:N] = traj_indices
 			expanded_traj_indices[N:] = -1
