@@ -41,7 +41,6 @@ def localizeAndTrackND2file(
 	minInt = 0.0
 ):
 	f = ND2Reader(nd2_file)
-	print(f)
 	loc_file = nd2_file.replace('.nd2', '_locs.txt')
 	if not mat_save_file:
 		mat_save_file = nd2_file.replace('.nd2', '_Tracked.mat')
@@ -730,7 +729,7 @@ def reconnectFrame(
 						naive_var_bound
 					)
 			#P = minimizeTrace(LL)
-			assignments = np.asarray(munkres_solve.compute(LL), dtype = 'uint8')
+			assignments = np.asarray(munkres_solver.compute(LL), dtype = 'uint8')
 			P = np.zeros((max_dim, max_dim), dtype = 'uint8')
 			P[assignments[:,0], assignments[:,1]] = 1
 
@@ -939,12 +938,45 @@ if __name__ == '__main__':
 		help = 'maximum number of frames tolerated for a blinking trajectory before dropping',
 		default = 1
 	)
+	parser.add_argument(
+		'-t',
+		'--track_only',
+		action = 'store_true',
+		help = 'only perform tracking instead of localization + tracking. Expects a localization file (TXT) as input instead of ND2',
+		default = False
+	)
 	args = parser.parse_args()
-	if os.path.isdir(args.nd2_file):
-		path_list = ['%s/%s' % (args.nd2_file, i) for i in os.listdir(args.nd2_file) if '.nd2' in i]
-		for nd2_path in path_list:
+	if args.track_only:
+		pfa = chi2inv(args.error_rate)
+		track(
+			args.nd2_file,
+			pfa,
+			args.frame_interval,
+			mat_save_file = None,
+			Dmax = args.Dmax,
+			naive_Dbound = 0.1,   #default
+			searchExpFac = args.searchExpFac,
+			max_blinks = args.max_blinks,
+			minInt = 0.0
+		)
+	else:
+		if os.path.isdir(args.nd2_file):
+			path_list = ['%s/%s' % (args.nd2_file, i) for i in os.listdir(args.nd2_file) if '.nd2' in i]
+			for nd2_path in path_list:
+				localizeAndTrackND2file(
+					nd2_path,
+					error_rate = args.error_rate,
+					pixel_size_um = args.pixel_size_um,
+					frame_interval = args.frame_interval,
+					Dmax = args.Dmax,
+					wavelength = args.wavelength,
+					NA = args.NA,
+					searchExpFac = args.searchExpFac,
+					max_blinks = args.max_blinks
+				)
+		elif os.path.isfile(args.nd2_file):
 			localizeAndTrackND2file(
-				nd2_path,
+				args.nd2_file,
 				error_rate = args.error_rate,
 				pixel_size_um = args.pixel_size_um,
 				frame_interval = args.frame_interval,
@@ -954,16 +986,4 @@ if __name__ == '__main__':
 				searchExpFac = args.searchExpFac,
 				max_blinks = args.max_blinks
 			)
-	elif os.path.isfile(args.nd2_file):
-		localizeAndTrackND2file(
-			args.nd2_file,
-			error_rate = args.error_rate,
-			pixel_size_um = args.pixel_size_um,
-			frame_interval = args.frame_interval,
-			Dmax = args.Dmax,
-			wavelength = args.wavelength,
-			NA = args.NA,
-			searchExpFac = args.searchExpFac,
-			max_blinks = args.max_blinks
-		)
 
