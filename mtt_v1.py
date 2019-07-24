@@ -1,5 +1,5 @@
 '''
-mtt_v2.py -- implementation of the multiple target tracing algorithm 
+mtt.py -- implementation of the multiple target tracing algorithm 
 to localize and track fluorophores in single molecule microscopy
 data.
 
@@ -7,8 +7,6 @@ THEORY: See supplemental materials of
 Arnauld, Nicolas, Hervé & Didier. "Dynamic multiple-target tracing to
 probe spatiotemporal cartography of cell membranes." Nature Methods
 5, 687 - 694 (2008).
-
-Updated 190723.
 
 '''
 __author__ = 'Alec Heckert'
@@ -20,175 +18,55 @@ import pandas as pd
 import sys 
 import random
 from scipy import io as sio 
-import click
+import argparse
 import os 
 import time 
 from munkres import Munkres
 munkres_solver = Munkres()
 
-@click.group()
-def cli():
-	'''
-	Localization and tracking utilities for single molecule tracking
-	data in Nikon ND2 files. For usage information on a particular
-	command, run
-
-		python mtt.py <command_name> --help
-
-	'''
-	pass
-
-@cli.command()
-@click.argument('nd2_file_or_directory', type = str)
-@click.option('-m', '--mat_save_suffix', type = str, default = '_Tracked.mat', help = 'default _Tracked.mat')
-@click.option('-w', '--window_size', type = int, default = 9, help = 'default 9 pixels')
-@click.option('-e', '--error_rate', type = float, default = 7.0, help = 'default 7.0')
-@click.option('-p', '--psf_scale', type = float, default = 1.35, help = 'default 1.35')
-@click.option('-s', '--pixel_size_um', type = float, default = 0.16, help = 'default 0.16 um/pixel')
-@click.option('-y', '--wavelength', type = float, default = 0.664, help = 'default 0.664 um')
-@click.option('-r', '--frame_interval', type = float, default = 0.00748, help = 'default 0.00748 s')
-@click.option('-n', '--na', type = float, default = 1.49, help = 'default 1.49')
-@click.option('-d', '--d_max', type = float, default = 15.0, help = 'default 15.0 um^2 s^-1')
-@click.option('-a', '--naive_d_bound', type = float, default = 0.1, help = 'default 0.1 um^2 s^-1')
-@click.option('-f', '--search_exp_fac', type = int, default = 1, help = 'default 1')
-@click.option('-b', '--max_blinks', type = int, default = 1, help = 'default 1')
-@click.option('-i', '--min_int', type = float, default = 0.0, help = 'default 0.0')
-def localize_and_track(
-	nd2_file_or_directory,
-	mat_save_suffix = '_Tracked.mat',
+def localizeAndTrackND2file(
+	nd2_file,
+	mat_save_file = None,
 	window_size = 9,
 	error_rate = 7.0,
 	psf_scale = 1.35,
 	pixel_size_um = 0.16,
 	wavelength = 0.664,
 	frame_interval = 0.00748,
-	na = 1.49,
-	d_max = 15.0,
-	naive_d_bound = 0.1,
-	search_exp_fac = 1,
+	NA = 1.49,
+	Dmax = 20.0, 
+	naive_Dbound = 0.1,
+	searchExpFac = 9,
 	max_blinks = 2,
-	min_int = 0.0
+	minInt = 0.0
 ):
-	'''
-	Localize and track single molecules in an ND2 file or a
-	directory of ND2 files. If given as a directory, automatically
-	generates output files for each ND2 file in the directory.
-
-	'''
-	if os.path.isdir(nd2_file_or_directory):
-		path_list = ['%s/%s' % (nd2_file_or_directory, i) for i in os.listdir(nd2_file_or_directory) if '.nd2' in i]
-	elif os.path.isfile(nd2_file_or_directory):
-		path_list = [nd2_file_or_directory]
-	for nd2_path in path_list:
-		loc_file = nd2_file.replace('.nd2', '_locs.txt')
-		mat_save_file = nd2_file.replace('.nd2', mat_save_suffix)
-		localizeND2file(
-			nd2_path,
-			outfile = loc_file,
-			window_size = window_size,
-			error_rate = error_rate,
-			psf_scale = psf_scale,
-			pixel_size_um = pixel_size_um,
-			wavelength = wavelength,
-			NA = na 
-		)
-		trajectories = track_locs(
-			loc_file,
-			chi2inv(error_rate),
-			frame_interval,
-			mat_save_file = mat_save_file,
-			Dmax = d_max,
-			naive_Dbound = naive_d_bound,
-			searchExpFac = search_exp_fac,
-			max_blinks = max_blinks,
-			minInt = min_int,
-			pixel_size_um = pixel_size_um
-		)
-		return trajectories 
-
-@cli.command()
-@click.argument('nd2_file_or_directory', type = str)
-@click.option('-w', '--window_size', type = int, default = 9, help = 'default 9 pixels')
-@click.option('-e', '--error_rate', type = float, default = 7.0, help = 'default 7.0')
-@click.option('-p', '--psf_scale', type = float, default = 1.35, help = 'default 1.35')
-@click.option('-s', '--pixel_size_um', type = float, default = 0.16, help = 'default 0.16 um/pixel')
-@click.option('-y', '--wavelength', type = float, default = 0.664, help = 'default 0.664 um')
-@click.option('-n', '--na', type = float, default = 1.49, help = 'default 1.49')
-def localize(
-	nd2_file_or_directory,
-	window_size,
-	error_rate,
-	psf_scale,
-	pixel_size_um,
-	wavelength,
-	na
-):
-	'''
-	Localize single molecules in an ND2 movie, saving the result
-	as a tab-delimited file with the suffix '_locs.txt'. If run
-	on a directory of ND2 files, runs localization on each file
-	individually.
-
-	'''
-	if os.path.isdir(nd2_file_or_directory):
-		path_list = ['%s/%s' % (nd2_file_or_directory, i) for i in os.listdir(nd2_file_or_directory) if '.nd2' in i]
-	elif os.path.isfile(nd2_file_or_directory):
-		path_list = [nd2_file_or_directory]
-	for nd2_path in path_list:
-		loc_file = nd2_path.replace('.nd2', '_locs.txt')
-		localizeND2file(
-			nd2_path,
-			outfile = loc_file,
-			window_size = window_size,
-			error_rate = error_rate,
-			psf_scale = psf_scale,
-			pixel_size_um = pixel_size_um,
-			wavelength = wavelength,
-			NA = na 
-		)
-		print('Finished localizing %s' % nd2_path)
-
-@cli.command()
-@click.argument('localization_txt', type = str)
-@click.option('-e', '--error_rate', type = float, default = 7.0, help = 'default 7.0')
-@click.option('-r', '--frame_interval', type = float, default = 0.00748, help = 'default 0.00748 s')
-@click.option('-m', '--mat_save_suffix', type = str, default = '_Tracked.mat', help = 'default _Tracked.mat')
-@click.option('-d', '--d_max', type = float, default = 15.0, help = 'default 15.0 um^2 s^-1')
-@click.option('-a', '--naive_d_bound', type = float, default = 0.1, help = 'default 0.1 um^2 s^-1')
-@click.option('-f', '--search_exp_fac', type = int, default = 1, help = 'default 1')
-@click.option('-b', '--max_blinks', type = int, default = 1, help = 'default 1')
-@click.option('-i', '--min_int', type = float, default = 0.0, help = 'default 0.0')
-@click.option('-s', '--pixel_size_um', type = float, default = 0.16, help = 'default 0.16 um/pixel')
-def track(
-	localization_txt,
-	error_rate,
-	frame_interval,
-	mat_save_suffix,
-	d_max,
-	naive_d_bound,
-	search_exp_fac,
-	max_blinks,
-	min_int,
-	pixel_size_um
-):
-	'''
-	Reconnect localizations into trajectories. Here, localization_txt
-	is a tab-delimited file with columns y_coord_pixels and x_coord_pixels.
-
-	'''
-	mat_save_file = localization_txt.replace('.txt', mat_save_suffix)
-	trajectories = track_locs(
+	f = ND2Reader(nd2_file)
+	loc_file = nd2_file.replace('.nd2', '_locs.txt')
+	if not mat_save_file:
+		mat_save_file = nd2_file.replace('.nd2', '_Tracked.mat')
+	time_0 = time.clock()
+	localizeND2file(
+		nd2_file,
+		outfile = loc_file,
+		window_size = window_size,
+		error_rate = error_rate,
+		psf_scale = psf_scale,
+		pixel_size_um = pixel_size_um,
+		wavelength = wavelength,
+		NA = NA
+	)
+	trajectories = track(
 		loc_file,
 		chi2inv(error_rate),
 		frame_interval,
 		mat_save_file = mat_save_file,
-		Dmax = d_max,
-		naive_Dbound = naive_d_bound,
-		searchExpFac = search_exp_fac,
+		Dmax = Dmax,
+		naive_Dbound = naive_Dbound,
+		searchExpFac = searchExpFac,
 		max_blinks = max_blinks,
-		minInt = min_int,
-		pixel_size_um = pixel_size_um
+		minInt = minInt
 	)
+	return trajectories
 
 def localizeND2file(
 	nd2_file,
@@ -213,7 +91,7 @@ def localizeND2file(
 		outfile = nd2_file.replace('.nd2', '_locs.txt')
 	format_string = '%f\t%f\t%f\t%f\t%f\t%f\t%r\t%f\n'
 	with open(outfile, 'w') as o:
-		o.write('particle_idx\tframe_idx\ty_coord_pixels\tx_coord_pixels\talpha\tSig2\toffset\tr\tresult_ok\tim_part_var\n')
+		o.write('particle_idx\tframe_idx\ty_coord_um\tx_coord_um\talpha\tSig2\toffset\tr\tresult_ok\tim_part_var\n')
 		particle_idx = 0
 		for frame_idx in range(N_frames):
 			image_2d = f.get_frame_2D(t = frame_idx)
@@ -235,6 +113,7 @@ def localizeND2file(
 			sys.stdout.write('Finished localizing %d/%d frames...\r' % (frame_idx + 1, N_frames))
 			sys.stdout.flush()
 
+	print('Finished localizing %s (%.1f sec)' % (nd2_file, time.clock() - time_0))
 
 def localize(
 	image_2d,
@@ -643,7 +522,7 @@ def minimizeTrace(matrix):
 class Trajectory(object):
 	def __init__(
 		self,
-		positions = [],  #list of np.array([y_coord_pixels, x_coord_pixels])
+		positions = [],  #list of np.array([y_coord_um, x_coord_um])
 		frames = [],   #list of frame indices
 		active = True,
 		N_blinks = 0,
@@ -655,7 +534,7 @@ class Trajectory(object):
 		self.N_blinks = N_blinks
 		self.D = D 
 
-def track_locs(
+def track(
 	localization_file,
 	pfa,
 	frame_interval,
@@ -664,18 +543,12 @@ def track_locs(
 	naive_Dbound = 0.1,
 	searchExpFac = 9,
 	max_blinks = 2,
-	minInt = 0.0,
-	pixel_size_um = 0.16
+	minInt = 0.0
 ):
 	var_free = Dmax * 4 * frame_interval
 	naive_var_bound = naive_Dbound * 4 * frame_interval
 
 	locs = np.asarray(pd.read_csv(localization_file, sep = '\t'))
-
-	#convert pixels to um
-	locs[:, 2] = locs[:, 2] * pixel_size_um
-	locs[:, 3] = locs[:, 3] * pixel_size_um
-
 	N_frames = locs[:,1].max() + 1
 	active_trajectories = [Trajectory(
 		positions = [loc[2:4]],
@@ -994,4 +867,123 @@ def logLikelihoodReconnection(
 	return L_blink + L_intensity + L_displacement
 
 if __name__ == '__main__':
-	cli()
+	parser = argparse.ArgumentParser(
+		description = 'use the multiple-target tracing (MTT) algorithm \
+			to track single molecule localization data')
+	parser.add_argument(
+		'nd2_file',
+		type = str,
+		help = 'ND2 file or directory with ND2 files'
+	)
+	parser.add_argument(
+		'-o',
+		'--out_mat_file',
+		type = str,
+		help = 'MAT file to save trajectories to',
+		default = None 
+	)
+	parser.add_argument(
+		'-e',
+		'--error_rate',
+		type = float,
+		help = 'log-error threshold for detection',
+		default = 8.5
+	)
+	parser.add_argument(
+		'-p',
+		'--pixel_size_um',
+		type = float,
+		help = 'um per pixel',
+		default = 0.16
+	)
+	parser.add_argument(
+		'-f',
+		'--frame_interval',
+		type = float,
+		help = 'interval between frames in sec',
+		default = 0.00748
+	)
+	parser.add_argument(
+		'-D',
+		'--Dmax',
+		type = float,
+		help = 'Max expected diffusion coefficient',
+		default = 15.0
+	)
+	parser.add_argument(
+		'-w',
+		'--wavelength',
+		type = float,
+		help = 'peak emission wavelength in um',
+		default = 0.664
+	)
+	parser.add_argument(
+		'-n',
+		'--NA',
+		type = float,
+		help = 'numerical aperture of microscope',
+		default = 1.49
+	)
+	parser.add_argument(
+		'-s',
+		'--searchExpFac',
+		type = float,
+		help = 'modifier for search radius of particle',
+		default = 16
+	)
+	parser.add_argument(
+		'-b',
+		'--max_blinks',
+		type = int,
+		help = 'maximum number of frames tolerated for a blinking trajectory before dropping',
+		default = 1
+	)
+	parser.add_argument(
+		'-t',
+		'--track_only',
+		action = 'store_true',
+		help = 'only perform tracking instead of localization + tracking. Expects a localization file (TXT) as input instead of ND2',
+		default = False
+	)
+	args = parser.parse_args()
+	if args.track_only:
+		pfa = chi2inv(args.error_rate)
+		track(
+			args.nd2_file,
+			pfa,
+			args.frame_interval,
+			mat_save_file = None,
+			Dmax = args.Dmax,
+			naive_Dbound = 0.1,   #default
+			searchExpFac = args.searchExpFac,
+			max_blinks = args.max_blinks,
+			minInt = 0.0
+		)
+	else:
+		if os.path.isdir(args.nd2_file):
+			path_list = ['%s/%s' % (args.nd2_file, i) for i in os.listdir(args.nd2_file) if '.nd2' in i]
+			for nd2_path in path_list:
+				localizeAndTrackND2file(
+					nd2_path,
+					error_rate = args.error_rate,
+					pixel_size_um = args.pixel_size_um,
+					frame_interval = args.frame_interval,
+					Dmax = args.Dmax,
+					wavelength = args.wavelength,
+					NA = args.NA,
+					searchExpFac = args.searchExpFac,
+					max_blinks = args.max_blinks
+				)
+		elif os.path.isfile(args.nd2_file):
+			localizeAndTrackND2file(
+				args.nd2_file,
+				error_rate = args.error_rate,
+				pixel_size_um = args.pixel_size_um,
+				frame_interval = args.frame_interval,
+				Dmax = args.Dmax,
+				wavelength = args.wavelength,
+				NA = args.NA,
+				searchExpFac = args.searchExpFac,
+				max_blinks = args.max_blinks
+			)
+
