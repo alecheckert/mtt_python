@@ -29,6 +29,8 @@ import os
 import time 
 import matplotlib.pyplot as plt 
 from munkres import Munkres
+import warnings
+warnings.filterwarnings('ignore')
 munkres_solver = Munkres()
 
 @click.group()
@@ -249,7 +251,8 @@ def localize(
 	pixel_size_um = 0.16,
 	wavelength = 0.664,
 	na = 1.49,
-	radial_symmetry_weights = 'centroid_distance_and_gradient_magnitude'
+	radial_symmetry_weights = 'centroid_distance_and_gradient_magnitude',
+	filter_out_border_detections = True   
 ):
 	time_0 = time.time()
 	result = localize_nd2(
@@ -262,7 +265,8 @@ def localize(
 		pixel_size_um = pixel_size_um,
 		wavelength = wavelength,
 		na = na,
-		radial_symmetry_weights = radial_symmetry_weights
+		radial_symmetry_weights = radial_symmetry_weights,
+		max_particles = 100000
 	)
 	result = pd.DataFrame(result, columns = [
 		'particle_idx',
@@ -278,6 +282,17 @@ def localize(
 	])
 	if out_txt == None:
 		out_txt = nd2_file.replace('.nd2', '_locs.txt')
+	result = result[~pd.isnull(result['particle_idx'])]
+	result['particle_idx'] = result['particle_idx'].astype('uint16')
+	result['frame_idx'] = result['frame_idx'].astype('uint16')
+	result['y_coord_pixels_detected'] = result['y_coord_pixels'].astype('uint16')
+	result['x_coord_pixels_detected'] = result['x_coord_pixels'].astype('uint16')
+	result['result_ok'] = result['result_ok'].astype('bool')
+
+	if filter_out_border_detections:
+		result = result[result['result_ok']]
+		result['particle_idx'] = np.arange(len(result))
+
 	result.to_csv(out_txt, sep = '\t', index = False)
 
 def localize_nd2(
@@ -336,7 +351,7 @@ def localize_nd2(
 	tfhgc = pyfftw.empty_aligned((N, M), dtype = 'complex128')
 	tfhgc[:] = fft2(hgc)
 
-	bord = np.ceil(rs_window_size // 2) + 2
+	bord = int(rs_window_size // 2) 
 	rs_half = int(rs_window_size // 2)
 	sub_n = rs_window_size - 1
 	y_field, x_field = np.mgrid[:sub_n, :sub_n]
@@ -430,12 +445,17 @@ def localize_nd2(
 					#im_part = gaussian_filter(im_part, rs_filter_kernel)
 					im_part = uniform_filter(im_part, rs_filter_kernel)
 					
-					cross_a = im_part[1:, 1:] - im_part[:sub_n, :sub_n]
-					cross_b = im_part[1:, :sub_n] - im_part[:sub_n, 1:]
-					m = (cross_a + cross_b) / (cross_a - cross_b)
+					try:
+						cross_a = im_part[1:, 1:] - im_part[:sub_n, :sub_n]
+						cross_b = im_part[1:, :sub_n] - im_part[:sub_n, 1:]
+						m = (cross_a + cross_b) / (cross_a - cross_b)
+					except ValueError: # too close to border
+						result[global_idx, 6] = 0.0
+						continue
 
 					# Remove divide-by-zero errors
 					m[np.isinf(m)] = 0
+					m[np.isnan(m)] = 0
 
 					I = (im_part[:sub_n, :sub_n] + im_part[1:, :sub_n] + \
 						im_part[:sub_n, 1:] + im_part[1:, 1:]) / 4
@@ -526,7 +546,7 @@ def localize_single_frame(
 	tfhgc = pyfftw.empty_aligned((N, M), 'complex128')
 	tfhgc[:] = pyfftw.interfaces.numpy_fft.fft2(hgc)
 
-	bord = int(rs_window_size // 2)
+	bord = int(rs_window_size // 2) 
 	rs_half = int(rs_window_size // 2)
 	sub_n = rs_window_size - 1
 	y_field, x_field = np.mgrid[:sub_n, :sub_n]
@@ -615,16 +635,22 @@ def localize_single_frame(
 			result[detect_idx, 9] = im_part.var()
 
 			im_part -= (im_part.min() - 1) / 2
-			#im_part = gaussian_filter(im_part, rs_filter_kernel)
-			im_part = uniform_filter(im_part, rs_filter_kernel)
+			#im_part -= (im_part.min() - 1)
+			im_part = gaussian_filter(im_part, rs_filter_kernel)
+			#im_part = uniform_filter(im_part, rs_filter_kernel)
 			
-			cross_a = im_part[1:, 1:] - im_part[:sub_n, :sub_n]
-			cross_b = im_part[1:, :sub_n] - im_part[:sub_n, 1:]
+			try:
+				cross_a = im_part[1:, 1:] - im_part[:sub_n, :sub_n]
+				cross_b = im_part[1:, :sub_n] - im_part[:sub_n, 1:]
+			except ValueError:
+				result[detect_idx, 6] = 0.0
+				continue
 
 			m = (cross_a + cross_b) / (cross_a - cross_b)
 
 			# Remove divide by zero errors
 			m[np.isinf(m)] = 0
+			m[np.isnan(m)] = 0
 
 			I = (im_part[:sub_n, :sub_n] + im_part[1:, :sub_n] + \
 				im_part[:sub_n, 1:] + im_part[1:, 1:]) / 4
@@ -654,6 +680,9 @@ def localize_single_frame(
 
 			xc = xc + (detect_y - rs_half + 0.5)
 			yc = yc + (detect_x - rs_half + 0.5)
+
+			if (np.isnan(xc)) or (np.isnan(yc)):
+				print(m)
 
 			result[detect_idx, 2] = xc
 			result[detect_idx, 3] = yc 

@@ -183,7 +183,7 @@ def track(
 	'''
 	mat_save_file = localization_txt.replace('.txt', mat_save_suffix)
 	trajectories = track_locs(
-		loc_file,
+		localization_txt,
 		chi2inv(error_rate),
 		frame_interval,
 		mat_save_file = mat_save_file,
