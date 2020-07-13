@@ -1,6 +1,6 @@
 # Multiple target tracing (MTT) for Python
 
-### IMPORTANT: Most of the capabilities of `mtt_python` have been replaced by a newer library, `pyspaz`. New users should consult that library, unless there is a reason why this library must be used.
+### IMPORTANT: Most of the capabilities of `mtt_python` have been replaced by a newer library, `quot`. New users should consult that library, unless there is a reason why this library must be used.
 
 A Python implementation of the multiple-target tracing (MTT) algorithm to localize and track fluorophores in temporal super-resolution microscopy data. Takes Nikon ND2 files (and in the future TIF files) as input and generates localization and tracking data readable by MATLAB and other programs. Requires the [https://pypi.org/project/nd2reader/](nd2reader) package.
 
